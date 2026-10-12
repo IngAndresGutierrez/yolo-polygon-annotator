@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Node
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Local data: images, annotations and exports stay on this machine
+workspace/*
+!workspace/.gitkeep
+samples/generated/
+
+# Tool output
+.playwright-cli/
+
+# OS / editors
+.DS_Store
+.idea/
+.vscode/
+*.swp

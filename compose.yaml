@@ -1,0 +1,32 @@
+name: yolo-polygon-annotator
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: docker/backend.Dockerfile
+      args:
+        APP_UID: ${APP_UID:-1000}
+        APP_GID: ${APP_GID:-1000}
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      WORKSPACE_DIR: /workspace
+    ports:
+      - "127.0.0.1:${API_PORT:-8000}:8000"
+    volumes:
+      # Images, annotations, split manifests and exports survive restarts/rebuilds.
+      - ./workspace:/workspace
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/frontend.Dockerfile
+    ports:
+      - "127.0.0.1:${FRONTEND_PORT:-5173}:5173"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped

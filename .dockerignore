@@ -1,0 +1,19 @@
+# Keep build contexts small and free of local state/secrets.
+.git
+.gitignore
+**/node_modules
+**/dist
+**/.venv
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+**/.ruff_cache
+**/coverage
+**/.DS_Store
+**/*.tsbuildinfo
+.env
+.env.*
+workspace
+samples
+*.md
+!backend/README.md
