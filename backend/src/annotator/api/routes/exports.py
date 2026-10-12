@@ -1,0 +1,59 @@
+from __future__ import annotations
+
+from fastapi import APIRouter, status
+from fastapi.responses import FileResponse
+
+from annotator.api.dependencies import ContainerDep
+from annotator.models.export import (
+    ExportCreate,
+    ExportResult,
+    SplitCreate,
+    SplitManifest,
+    SplitSummary,
+)
+from annotator.models.validation import ProjectValidationReport
+
+router = APIRouter(prefix="/api/projects/{project_id}", tags=["validation & export"])
+
+
+@router.get("/validation", response_model=ProjectValidationReport)
+def validate_project(project_id: str, container: ContainerDep) -> ProjectValidationReport:
+    return container.validation.validate_project(project_id)
+
+
+@router.get("/splits", response_model=list[SplitSummary])
+def list_splits(project_id: str, container: ContainerDep) -> list[SplitSummary]:
+    return container.splits.list(project_id)
+
+
+@router.post("/splits", response_model=SplitManifest, status_code=status.HTTP_201_CREATED)
+def create_split(project_id: str, payload: SplitCreate, container: ContainerDep) -> SplitManifest:
+    return container.splits.create(project_id, payload)
+
+
+@router.get("/splits/{split_id}", response_model=SplitManifest)
+def get_split(project_id: str, split_id: str, container: ContainerDep) -> SplitManifest:
+    return container.splits.get(project_id, split_id)
+
+
+@router.get("/exports", response_model=list[ExportResult])
+def list_exports(project_id: str, container: ContainerDep) -> list[ExportResult]:
+    return container.exports.list(project_id)
+
+
+@router.post("/exports", response_model=ExportResult, status_code=status.HTTP_201_CREATED)
+def create_export(project_id: str, payload: ExportCreate, container: ContainerDep) -> ExportResult:
+    return container.exports.export(project_id, payload)
+
+
+@router.get("/exports/{export_id}/download", response_class=FileResponse)
+def download_export(project_id: str, export_id: str, container: ContainerDep) -> FileResponse:
+    export = container.exports.get(project_id, export_id)
+    path = container.exports.zip_path(project_id, export_id)
+    filename = f"{export.dataset_name}-{export.format}-{export_id}.zip"
+    return FileResponse(path, media_type="application/zip", filename=filename)
+
+
+@router.delete("/exports/{export_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_export(project_id: str, export_id: str, container: ContainerDep) -> None:
+    container.exports.delete(project_id, export_id)

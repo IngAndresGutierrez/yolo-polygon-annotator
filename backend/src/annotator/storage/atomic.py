@@ -1,0 +1,38 @@
+"""Atomic file writes: write to a temp file in the same directory, fsync, rename.
+
+`os.replace` is atomic on POSIX filesystems, so readers either see the old
+file or the new one, never a partially written file — even if the container
+is killed in the middle of an autosave.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import tempfile
+from pathlib import Path
+from typing import Any
+
+from pydantic import BaseModel
+
+
+def atomic_write_bytes(path: Path, data: bytes) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_name = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(data)
+            handle.flush()
+            os.fsync(handle.fileno())
+        Path(tmp_name).replace(path)
+    except BaseException:
+        Path(tmp_name).unlink(missing_ok=True)
+        raise
+
+
+def atomic_write_json(path: Path, payload: Any) -> None:
+    atomic_write_bytes(path, json.dumps(payload, indent=2, ensure_ascii=False).encode("utf-8"))
+
+
+def atomic_write_model(path: Path, model: BaseModel) -> None:
+    atomic_write_bytes(path, model.model_dump_json(by_alias=True, indent=2).encode("utf-8"))
