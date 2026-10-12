@@ -4,10 +4,12 @@ import { navigate } from '../../app/router'
 import { DropZone } from '../../components/image-gallery/DropZone'
 import { ImageCard } from '../../components/image-gallery/ImageCard'
 import { ImportReportPanel } from '../../components/image-gallery/ImportReportPanel'
+import { ExportSelectionDialog } from '../../components/image-gallery/ExportSelectionDialog'
 import { SelectionBar } from '../../components/image-gallery/SelectionBar'
 import { ConfirmDialog } from '../../components/ui/Dialog'
 import { Alert, EmptyState, Spinner } from '../../components/ui/Feedback'
 import { useImageActions } from '../../hooks/useImageActions'
+import { useYoloExport } from '../../hooks/useYoloExport'
 import { thumbnailUrl } from '../../services/projectsApi'
 import { useProjectStore } from '../../stores/projectStore'
 import type { ImageRecord, ImageStatus } from '../../types/project'
@@ -37,6 +39,8 @@ export function GalleryPage() {
   const error = useProjectStore((s) => s.error)
   const { importFiles, progress, report, clearReport } = useImport()
   const { run, busy } = useImageActions()
+  const yoloExport = useYoloExport()
+  const [exportOpen, setExportOpen] = useState(false)
 
   const [search, setSearch] = useState('')
   const deferredSearch = useDeferredValue(search)
@@ -163,6 +167,7 @@ export function GalleryPage() {
             onExclude={() => void runOnSelection('exclude')}
             onInclude={() => void runOnSelection('include')}
             onDelete={() => setToDelete(selected)}
+            onExportYolo={() => setExportOpen(true)}
             onClear={() => setSelectedIds(new Set())}
           />
         )}
@@ -194,6 +199,17 @@ export function GalleryPage() {
         )}
       </div>
 
+      <ExportSelectionDialog
+        open={exportOpen}
+        images={selected}
+        busy={yoloExport.busy}
+        onClose={() => setExportOpen(false)}
+        onExport={(format, name) =>
+          void yoloExport.downloadSelection(selected.map((img) => img.id), format, name).then((ok) => {
+            if (ok) setExportOpen(false)
+          })
+        }
+      />
       <ConfirmDialog
         open={toDelete !== null}
         title={toDelete && toDelete.length > 1 ? `Delete ${toDelete.length} images?` : 'Delete image?'}

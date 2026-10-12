@@ -186,7 +186,7 @@ export function EditorPage({ imageId }: { imageId: string }) {
             </div>
           )}
         </div>
-        <AnnotationPanel issues={issues} className="hidden w-72 shrink-0 md:flex" />
+        <AnnotationPanel issues={issues} onBeforeExport={flush} className="hidden w-72 shrink-0 md:flex" />
       </div>
       <EditorStatusBar
         filename={record.filename}

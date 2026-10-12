@@ -80,3 +80,19 @@ class ExportResult(ApiModel):
     size_bytes: int
     download_url: str
     warnings: list[str] = Field(default_factory=list)
+
+
+class SelectionExportCreate(ApiModel):
+    """Export chosen images as a flat YOLO folder (no train/val/test split)."""
+
+    image_ids: list[str] = Field(min_length=1, max_length=5000)
+    format: ExportFormat
+    dataset_name: str = Field(default="selection", min_length=1, max_length=64)
+
+
+class YoloLabel(ApiModel):
+    image_id: str
+    filename: str
+    format: ExportFormat
+    text: str
+    object_count: int

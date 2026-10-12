@@ -4,6 +4,7 @@ import { modKeyLabel } from '../../hooks/useKeyboardShortcuts'
 import { exclusionReasonLabel, useImageActions } from '../../hooks/useImageActions'
 import { selectSelectedAnnotation, useEditorStore } from '../../stores/editorStore'
 import { useProjectStore } from '../../stores/projectStore'
+import { YoloExportSection } from './YoloExportSection'
 import type { Annotation } from '../../types/annotation'
 import type { IssuesById } from '../../utils/annotationValidation'
 import { imageToYolo } from '../../utils/coordinates'
@@ -144,7 +145,14 @@ function VertexTable({ annotation, width, height }: { annotation: Annotation; wi
   )
 }
 
-export function AnnotationPanel({ issues, className = '' }: { issues: IssuesById; className?: string }) {
+interface AnnotationPanelProps {
+  issues: IssuesById
+  /** Saves pending edits; used before exporting so labels match the canvas. */
+  onBeforeExport: () => Promise<boolean>
+  className?: string
+}
+
+export function AnnotationPanel({ issues, onBeforeExport, className = '' }: AnnotationPanelProps) {
   const { annotations, selectedId, negative, width, height, activeClass, setNegative } = useEditorStore(
     useShallow((s) => ({
       annotations: s.annotations,
@@ -157,6 +165,8 @@ export function AnnotationPanel({ issues, className = '' }: { issues: IssuesById
     })),
   )
   const selected = useEditorStore(selectSelectedAnnotation)
+  const imageId = useEditorStore((s) => s.imageId)
+  const filename = useProjectStore((s) => s.images.find((img) => img.id === imageId)?.filename)
 
   return (
     <aside aria-label="Annotations" className={`flex flex-col overflow-y-auto border-l border-surface-700 bg-surface-900 ${className}`}>
@@ -197,6 +207,10 @@ export function AnnotationPanel({ issues, className = '' }: { issues: IssuesById
       </section>
 
       <DatasetToggle />
+
+      {imageId && filename && (
+        <YoloExportSection imageId={imageId} filename={filename} invalid={issues.size > 0} onBeforeExport={onBeforeExport} />
+      )}
 
       {selected && (
         <section className="border-b border-surface-700 p-3">

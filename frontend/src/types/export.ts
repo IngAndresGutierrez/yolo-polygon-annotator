@@ -76,3 +76,11 @@ export interface ProjectValidationReport {
   images: ImageValidation[]
   projectIssues: ValidationIssue[]
 }
+
+export interface YoloLabel {
+  imageId: string
+  filename: string
+  format: ExportFormat
+  text: string
+  objectCount: number
+}

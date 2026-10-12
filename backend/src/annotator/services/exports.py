@@ -7,6 +7,12 @@ ZIP layout (`<root>` is the slugified dataset name):
     <root>/data.yaml
     <root>/split_manifest.csv
 
+Selection exports (a few chosen images, no split) use a flat layout:
+
+    <root>/images/<image_id>.<ext>
+    <root>/labels/<image_id>.txt
+    <root>/classes.txt          one class name per line, line number = class id
+
 File stems are internal image ids, which are unique per project, so names
 never collide even if two source files share a stem with different
 extensions.
@@ -23,15 +29,24 @@ import zipfile
 from pathlib import Path
 
 from annotator.core.config import Settings
-from annotator.core.errors import InvalidInputError
-from annotator.models.export import ExportCreate, ExportResult, SplitCreate, SplitManifest
-from annotator.models.project import Project
+from annotator.core.errors import InvalidInputError, NotFoundError
+from annotator.models.annotation import ImageAnnotations
+from annotator.models.export import (
+    ExportCreate,
+    ExportFormat,
+    ExportResult,
+    SelectionExportCreate,
+    SplitCreate,
+    SplitManifest,
+    YoloLabel,
+)
+from annotator.models.project import ImageRecord, Project
 from annotator.services.annotations import AnnotationService
 from annotator.services.exporters.yolo import build_data_yaml, detection_line, segmentation_line
 from annotator.services.projects import utcnow
 from annotator.services.splits import SplitService, new_id
 from annotator.services.validation import ValidationService
-from annotator.services.validators.annotations import to_coords
+from annotator.services.validators.annotations import to_coords, validate_image_annotations
 from annotator.storage.paths import slugify
 from annotator.storage.repository import ProjectRepository
 
@@ -50,6 +65,23 @@ def _zip_info(name: str, compress: bool) -> zipfile.ZipInfo:
     else:
         info.external_attr = (stat.S_IFREG | 0o644) << 16
     return info
+
+
+def yolo_label_text(doc: ImageAnnotations, record: ImageRecord, fmt: ExportFormat) -> str:
+    """Label file content for one image; empty string for images without objects."""
+    line_fn = detection_line if fmt == "detection" else segmentation_line
+    lines = [
+        line_fn(a.class_id, to_coords(a.points), record.width, record.height)
+        for a in doc.annotations
+    ]
+    return "\n".join(lines) + ("\n" if lines else "")
+
+
+def build_classes_txt(class_names: dict[int, str]) -> str:
+    """YOLO classes.txt: line N holds the name of class id N (gaps left blank)."""
+    if not class_names:
+        return ""
+    return "\n".join(class_names.get(i, "") for i in range(max(class_names) + 1)) + "\n"
 
 
 class ExportService:
@@ -138,7 +170,6 @@ class ExportService:
                 + ", ".join(excluded[:10])
             )
 
-        line_fn = detection_line if request.format == "detection" else segmentation_line
         export_dir = self._repo.export_dir(project.id)
         export_dir.mkdir(parents=True, exist_ok=True)
         fd, tmp_name = tempfile.mkstemp(dir=export_dir, prefix=f".{export_id}.", suffix=".tmp")
@@ -162,13 +193,8 @@ class ExportService:
                         warnings.append(f"{record.filename} has no annotations anymore; skipped")
                         continue
                     doc = self._annotations.load(project.id, record)
-                    lines = []
-                    for annotation in doc.annotations:
-                        points = to_coords(annotation.points)
-                        lines.append(
-                            line_fn(annotation.class_id, points, record.width, record.height)
-                        )
-                    label_text = "\n".join(lines) + ("\n" if lines else "")
+                    label_text = yolo_label_text(doc, record, request.format)
+                    lines = label_text.splitlines()
 
                     split = assignment.split
                     extension = Path(record.stored_name).suffix
@@ -225,3 +251,88 @@ class ExportService:
         )
         self._repo.save_export_meta(result)
         return result
+
+    # -- single image / selection ---------------------------------------------
+    def _checked_documents(
+        self, project: Project, image_ids: list[str]
+    ) -> list[tuple[ImageRecord, ImageAnnotations]]:
+        """Load the requested images, refusing unknown ids and invalid geometry."""
+        by_id = {img.id: img for img in project.images}
+        missing = [i for i in image_ids if i not in by_id]
+        if missing:
+            raise NotFoundError(f"Images not found: {', '.join(missing[:10])}")
+        result = []
+        invalid = []
+        for image_id in dict.fromkeys(image_ids):
+            record = by_id[image_id]
+            doc = self._annotations.load(project.id, record)
+            errors = [
+                issue
+                for issue in validate_image_annotations(
+                    doc, self._settings.classes, self._settings.min_polygon_area
+                )
+                if issue.severity == "error"
+            ]
+            if errors:
+                invalid.append(
+                    {
+                        "imageId": record.id,
+                        "filename": record.filename,
+                        "issues": [e.message for e in errors],
+                    }
+                )
+            result.append((record, doc))
+        if invalid:
+            raise InvalidInputError(
+                f"{len(invalid)} image(s) have invalid polygons; fix or deselect them",
+                details={"images": invalid},
+            )
+        return result
+
+    def image_label(self, project_id: str, image_id: str, fmt: ExportFormat) -> YoloLabel:
+        project = self._repo.get_project(project_id)
+        [(record, doc)] = self._checked_documents(project, [image_id])
+        text = yolo_label_text(doc, record, fmt)
+        return YoloLabel(
+            image_id=record.id,
+            filename=record.filename,
+            format=fmt,
+            text=text,
+            object_count=len(doc.annotations),
+        )
+
+    def export_selection(self, project_id: str, request: SelectionExportCreate) -> Path:
+        """Write a flat YOLO ZIP for the chosen images to a temp file and return its path.
+
+        The caller streams the file to the client and deletes it afterwards; selection
+        exports are not kept in the export history.
+        """
+        with self._repo.lock(project_id):
+            project = self._repo.get_project(project_id)
+            documents = self._checked_documents(project, request.image_ids)
+            root = slugify(request.dataset_name, fallback="selection")
+            fd, tmp_name = tempfile.mkstemp(prefix="yolo-selection-", suffix=".zip")
+            os.close(fd)
+            try:
+                with zipfile.ZipFile(tmp_name, "w") as archive:
+                    for kind in ("images", "labels"):
+                        archive.writestr(_zip_info(f"{root}/{kind}/", False), b"")
+                    for record, doc in documents:
+                        extension = Path(record.stored_name).suffix
+                        archive.writestr(
+                            _zip_info(f"{root}/images/{record.id}{extension}", False),
+                            self._repo.image_path(project.id, record).read_bytes(),
+                        )
+                        archive.writestr(
+                            _zip_info(f"{root}/labels/{record.id}.txt", True),
+                            yolo_label_text(doc, record, request.format).encode("utf-8"),
+                        )
+                    class_names = {c.id: c.name for c in project.classes}
+                    archive.writestr(
+                        _zip_info(f"{root}/classes.txt", True),
+                        build_classes_txt(class_names).encode("utf-8"),
+                    )
+            except BaseException:
+                Path(tmp_name).unlink(missing_ok=True)
+                raise
+        return Path(tmp_name)

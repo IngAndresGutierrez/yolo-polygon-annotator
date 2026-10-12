@@ -202,6 +202,26 @@ sorted before the seeded shuffle, so the result does not depend on upload order.
 duplicates (perceptual dHash within `NEAR_DUPLICATE_THRESHOLD` bits) are reported when they end
 up in different partitions.
 
+#### Exporting a single image or a selection
+
+For checking labels, sharing a few images or merging them into another dataset there is a
+lighter export, without split or `data.yaml`. It is not stored in the export history.
+
+- **Editor → YOLO export (this image)**: choose Detection or Segmentation, then
+  *Copy label* (clipboard), *.txt* (the label file, named after the image) or
+  *Image + label* (ZIP). Pending edits are saved first, so the label matches the canvas.
+- **Images → select cards → Export YOLO**: format and folder name, then a ZIP:
+
+```text
+<folder>/
+├── images/<image_id>.<ext>
+├── labels/<image_id>.txt     # same lines as in the full export
+└── classes.txt               # line N = name of class id N
+```
+
+Images with invalid polygons are refused (the error lists them). Explicitly selected images
+are exported even if they are pending (empty label) or excluded from the dataset.
+
 #### About YOLO OBB (not implemented)
 
 OBB labels are *rotated rectangles* (`class x1 y1 … x4 y4` of a rectangle). A plate seen in
@@ -306,6 +326,8 @@ All endpoints are under `/api` and documented at `/docs`. Errors share one shape
 | GET/POST | `/api/projects/{pid}/splits`, `GET …/splits/{sid}` | Frozen split manifests |
 | GET/POST | `/api/projects/{pid}/exports` | List / create a YOLO export |
 | GET | `/api/projects/{pid}/exports/{eid}/download` | Download the ZIP |
+| POST | `/api/projects/{pid}/exports/selection` | `{imageIds, format, datasetName}` → flat YOLO ZIP (streamed, not stored) |
+| GET | `/api/projects/{pid}/images/{iid}/yolo?format=` | YOLO label text of one image |
 
 ## 7. Tests
 

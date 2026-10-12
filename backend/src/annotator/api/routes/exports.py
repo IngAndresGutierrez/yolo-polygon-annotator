@@ -1,18 +1,26 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, status
+from typing import Annotated
+
+from fastapi import APIRouter, Query, status
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse
+from starlette.background import BackgroundTask
 
 from annotator.api.dependencies import ContainerDep
 from annotator.models.export import (
     ExportCreate,
+    ExportFormat,
     ExportResult,
+    SelectionExportCreate,
     SplitCreate,
     SplitManifest,
     SplitSummary,
+    YoloLabel,
 )
 from annotator.models.quality import QualityReport
 from annotator.models.validation import ProjectValidationReport
+from annotator.storage.paths import slugify
 
 router = APIRouter(prefix="/api/projects/{project_id}", tags=["validation & export"])
 
@@ -64,3 +72,33 @@ def download_export(project_id: str, export_id: str, container: ContainerDep) ->
 @router.delete("/exports/{export_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_export(project_id: str, export_id: str, container: ContainerDep) -> None:
     container.exports.delete(project_id, export_id)
+
+
+@router.post(
+    "/exports/selection",
+    response_class=FileResponse,
+    responses={200: {"content": {"application/zip": {}}}},
+)
+async def export_selection(
+    project_id: str, payload: SelectionExportCreate, container: ContainerDep
+) -> FileResponse:
+    """Download chosen images with YOLO labels as a flat ZIP (no split, not stored)."""
+    path = await run_in_threadpool(container.exports.export_selection, project_id, payload)
+    filename = f"{slugify(payload.dataset_name, fallback='selection')}-{payload.format}.zip"
+    return FileResponse(
+        path,
+        media_type="application/zip",
+        filename=filename,
+        background=BackgroundTask(path.unlink, missing_ok=True),
+    )
+
+
+@router.get("/images/{image_id}/yolo", response_model=YoloLabel)
+def image_yolo_label(
+    project_id: str,
+    image_id: str,
+    container: ContainerDep,
+    format: Annotated[ExportFormat, Query()] = "detection",
+) -> YoloLabel:
+    """YOLO label text of one image, as it would appear in an export."""
+    return container.exports.image_label(project_id, image_id, format)

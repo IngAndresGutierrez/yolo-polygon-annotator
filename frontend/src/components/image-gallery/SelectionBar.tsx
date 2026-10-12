@@ -1,4 +1,4 @@
-import { CheckSquare, EyeOff, RotateCcw, Trash2, X } from 'lucide-react'
+import { CheckSquare, Download, EyeOff, RotateCcw, Trash2, X } from 'lucide-react'
 import { Button } from '../ui/Button'
 
 interface SelectionBarProps {
@@ -9,6 +9,7 @@ interface SelectionBarProps {
   onExclude: () => void
   onInclude: () => void
   onDelete: () => void
+  onExportYolo: () => void
   onClear: () => void
 }
 
@@ -21,6 +22,7 @@ export function SelectionBar({
   onExclude,
   onInclude,
   onDelete,
+  onExportYolo,
   onClear,
 }: SelectionBarProps) {
   return (
@@ -36,6 +38,9 @@ export function SelectionBar({
         </Button>
       )}
       <div className="ml-auto flex flex-wrap gap-2">
+        <Button size="sm" icon={Download} disabled={busy} onClick={onExportYolo}>
+          Export YOLO
+        </Button>
         <Button size="sm" variant="primary" icon={EyeOff} disabled={busy} onClick={onExclude}>
           Exclude from dataset
         </Button>
