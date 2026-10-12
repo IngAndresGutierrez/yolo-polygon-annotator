@@ -4,43 +4,51 @@ import { navigate } from '../../app/router'
 import { DropZone } from '../../components/image-gallery/DropZone'
 import { ImageCard } from '../../components/image-gallery/ImageCard'
 import { ImportReportPanel } from '../../components/image-gallery/ImportReportPanel'
+import { SelectionBar } from '../../components/image-gallery/SelectionBar'
 import { ConfirmDialog } from '../../components/ui/Dialog'
 import { Alert, EmptyState, Spinner } from '../../components/ui/Feedback'
-import { errorMessage } from '../../services/apiClient'
-import { imagesApi, thumbnailUrl } from '../../services/projectsApi'
+import { useImageActions } from '../../hooks/useImageActions'
+import { thumbnailUrl } from '../../services/projectsApi'
 import { useProjectStore } from '../../stores/projectStore'
-import { toast } from '../../stores/toastStore'
 import type { ImageRecord, ImageStatus } from '../../types/project'
 import { useImport } from './useImport'
 
-type StatusFilter = 'all' | ImageStatus
+type StatusFilter = 'all' | ImageStatus | 'excluded'
 
 const FILTERS: { value: StatusFilter; label: string }[] = [
   { value: 'all', label: 'All' },
   { value: 'pending', label: 'Pending' },
   { value: 'annotated', label: 'Annotated' },
   { value: 'negative', label: 'No objects' },
+  { value: 'excluded', label: 'Excluded' },
 ]
+
+/** Status filters only show images in the dataset; excluded ones have their own filter. */
+const matchesFilter = (image: ImageRecord, filter: StatusFilter): boolean => {
+  if (filter === 'all') return true
+  if (filter === 'excluded') return image.excluded
+  return !image.excluded && image.status === filter
+}
 
 export function GalleryPage() {
   const projectId = useProjectStore((s) => s.projectId)
   const images = useProjectStore((s) => s.images)
   const loading = useProjectStore((s) => s.loading)
   const error = useProjectStore((s) => s.error)
-  const removeImage = useProjectStore((s) => s.removeImage)
   const { importFiles, progress, report, clearReport } = useImport()
+  const { run, busy } = useImageActions()
 
   const [search, setSearch] = useState('')
   const deferredSearch = useDeferredValue(search)
   const [filter, setFilter] = useState<StatusFilter>('all')
   const [overwrite, setOverwrite] = useState(false)
-  const [toDelete, setToDelete] = useState<ImageRecord | null>(null)
-  const [deleting, setDeleting] = useState(false)
+  const [toDelete, setToDelete] = useState<ImageRecord[] | null>(null)
+  const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(new Set())
 
   const counts = useMemo(() => {
-    const result: Record<StatusFilter, number> = { all: images.length, pending: 0, annotated: 0, negative: 0 }
+    const result: Record<StatusFilter, number> = { all: images.length, pending: 0, annotated: 0, negative: 0, excluded: 0 }
     images.forEach((img) => {
-      result[img.status] += 1
+      result[img.excluded ? 'excluded' : img.status] += 1
     })
     return result
   }, [images])
@@ -48,25 +56,34 @@ export function GalleryPage() {
   const visible = useMemo(() => {
     const needle = deferredSearch.trim().toLowerCase()
     return images.filter(
-      (img) => (filter === 'all' || img.status === filter) && (!needle || img.filename.toLowerCase().includes(needle)),
+      (img) => matchesFilter(img, filter) && (!needle || img.filename.toLowerCase().includes(needle)),
     )
   }, [images, filter, deferredSearch])
 
+  // Selection only ever refers to images that still exist.
+  const selected = useMemo(() => images.filter((img) => selectedIds.has(img.id)), [images, selectedIds])
+
   const onOpen = useCallback((image: ImageRecord) => navigate({ name: 'editor', imageId: image.id }), [])
-  const onDelete = useCallback((image: ImageRecord) => setToDelete(image), [])
+  const onDelete = useCallback((image: ImageRecord) => setToDelete([image]), [])
+  const onToggleSelect = useCallback(
+    (image: ImageRecord) =>
+      setSelectedIds((prev) => {
+        const next = new Set(prev)
+        if (!next.delete(image.id)) next.add(image.id)
+        return next
+      }),
+    [],
+  )
+
+  const runOnSelection = async (action: 'exclude' | 'include') => {
+    if (await run(selected.map((img) => img.id), action, 'manual')) setSelectedIds(new Set())
+  }
 
   const confirmDelete = async () => {
-    if (!projectId || !toDelete) return
-    setDeleting(true)
-    try {
-      await imagesApi.remove(projectId, toDelete.id)
-      removeImage(toDelete.id)
-      toast.success(`Deleted ${toDelete.filename}`)
-      setToDelete(null)
-    } catch (err) {
-      toast.error(errorMessage(err))
-    } finally {
-      setDeleting(false)
+    const targets = toDelete ?? []
+    setToDelete(null)
+    if (await run(targets.map((img) => img.id), 'delete')) {
+      setSelectedIds((prev) => new Set([...prev].filter((id) => !targets.some((t) => t.id === id))))
     }
   }
 
@@ -78,7 +95,7 @@ export function GalleryPage() {
             <h1 className="text-xl font-semibold text-white">Images</h1>
             <p className="text-sm text-slate-400">
               {counts.all} total · {counts.annotated} annotated · {counts.negative} without objects · {counts.pending}{' '}
-              pending
+              pending{counts.excluded > 0 && ` · ${counts.excluded} excluded`}
             </p>
           </div>
         </div>
@@ -137,6 +154,19 @@ export function GalleryPage() {
           </div>
         </div>
 
+        {selected.length > 0 && (
+          <SelectionBar
+            count={selected.length}
+            visibleCount={visible.length}
+            busy={busy}
+            onSelectAllVisible={() => setSelectedIds(new Set(visible.map((img) => img.id)))}
+            onExclude={() => void runOnSelection('exclude')}
+            onInclude={() => void runOnSelection('include')}
+            onDelete={() => setToDelete(selected)}
+            onClear={() => setSelectedIds(new Set())}
+          />
+        )}
+
         {loading && images.length === 0 ? (
           <div className="flex justify-center py-16">
             <Spinner className="size-6" />
@@ -154,8 +184,10 @@ export function GalleryPage() {
                 key={image.id}
                 image={image}
                 thumbnailUrl={projectId ? thumbnailUrl(projectId, image) : ''}
+                selected={selectedIds.has(image.id)}
                 onOpen={onOpen}
                 onDelete={onDelete}
+                onToggleSelect={onToggleSelect}
               />
             ))}
           </ul>
@@ -164,16 +196,21 @@ export function GalleryPage() {
 
       <ConfirmDialog
         open={toDelete !== null}
-        title="Delete image?"
+        title={toDelete && toDelete.length > 1 ? `Delete ${toDelete.length} images?` : 'Delete image?'}
         message={
           <>
-            <span className="font-mono text-slate-200">{toDelete?.filename}</span> and its annotations will be removed
-            from the project. This cannot be undone.
+            {toDelete && toDelete.length === 1 ? (
+              <span className="font-mono text-slate-200">{toDelete[0]?.filename}</span>
+            ) : (
+              `${toDelete?.length ?? 0} images`
+            )}{' '}
+            and their annotations will be removed from the project. This cannot be undone; use{' '}
+            <strong>Exclude from dataset</strong> to keep them out of exports reversibly.
           </>
         }
         confirmLabel="Delete"
         destructive
-        busy={deleting}
+        busy={busy}
         onConfirm={() => void confirmDelete()}
         onCancel={() => setToDelete(null)}
       />

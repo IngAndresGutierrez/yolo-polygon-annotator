@@ -128,7 +128,9 @@ class ExportService:
         excluded = [
             img.filename
             for img in project.images
-            if img.id not in manifest_ids and (manifest.include_pending or img.status != "pending")
+            if img.id not in manifest_ids
+            and not img.excluded
+            and (manifest.include_pending or img.status != "pending")
         ]
         if excluded:
             warnings.append(
@@ -152,6 +154,9 @@ class ExportService:
                         warnings.append(
                             f"{assignment.filename} was deleted after the split; skipped"
                         )
+                        continue
+                    if record.excluded:
+                        warnings.append(f"{record.filename} is excluded from the dataset; skipped")
                         continue
                     if record.status == "pending" and not manifest.include_pending:
                         warnings.append(f"{record.filename} has no annotations anymore; skipped")

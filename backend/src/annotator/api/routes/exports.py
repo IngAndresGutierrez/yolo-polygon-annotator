@@ -11,6 +11,7 @@ from annotator.models.export import (
     SplitManifest,
     SplitSummary,
 )
+from annotator.models.quality import QualityReport
 from annotator.models.validation import ProjectValidationReport
 
 router = APIRouter(prefix="/api/projects/{project_id}", tags=["validation & export"])
@@ -19,6 +20,12 @@ router = APIRouter(prefix="/api/projects/{project_id}", tags=["validation & expo
 @router.get("/validation", response_model=ProjectValidationReport)
 def validate_project(project_id: str, container: ContainerDep) -> ProjectValidationReport:
     return container.validation.validate_project(project_id)
+
+
+@router.get("/quality", response_model=QualityReport)
+def quality_report(project_id: str, container: ContainerDep) -> QualityReport:
+    """Duplicate groups and invalid images among the images included in the dataset."""
+    return container.quality.report(project_id)
 
 
 @router.get("/splits", response_model=list[SplitSummary])

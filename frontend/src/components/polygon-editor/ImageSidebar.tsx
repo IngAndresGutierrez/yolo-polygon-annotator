@@ -40,7 +40,7 @@ const SidebarItem = memo(function SidebarItem({
         aria-current={active ? 'true' : undefined}
         className={`flex w-full items-center gap-2 rounded-md p-1.5 text-left ${
           active ? 'bg-accent-500/15 ring-1 ring-accent-500' : 'hover:bg-surface-800'
-        }`}
+        } ${image.excluded ? 'opacity-50' : ''}`}
       >
         <img src={thumbnail} alt="" loading="lazy" className="size-10 shrink-0 rounded bg-surface-950 object-cover" />
         <span className="min-w-0 flex-1">
@@ -48,6 +48,7 @@ const SidebarItem = memo(function SidebarItem({
           <span className="flex items-center gap-1.5 text-[11px] text-slate-500">
             <span className={`size-1.5 rounded-full ${statusDot[image.status]}`} aria-hidden />
             {image.status === 'negative' ? 'no objects' : `${image.annotationCount} obj`}
+            {image.excluded && <span className="text-rose-300">· excluded</span>}
           </span>
         </span>
       </button>

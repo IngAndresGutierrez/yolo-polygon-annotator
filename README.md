@@ -68,6 +68,10 @@ environment variables (see `.env.example`); `WORKSPACE_DIR` defaults to `./works
 
 The last opened project is restored automatically when you reopen the app.
 
+Tick the checkbox on a card (hover to reveal it) to select images; the selection bar offers
+**Exclude from dataset**, **Include** and **Delete** for all selected images at once. The
+**Excluded** filter lists images that are currently out of the dataset.
+
 ### 4.2 PASCAL VOC import
 
 - Each XML is matched to an image by its `<filename>` (case-insensitive); if that fails, by the
@@ -122,7 +126,30 @@ window size only change the viewport transform (`canvas = image × scale + offse
 `frontend/src/utils/coordinates.ts`. JPEGs with an EXIF orientation are rotated upright on
 import so the browser, the stored pixels and the training pipeline share one frame.
 
-### 4.4 Export
+### 4.4 Dataset quality (cleanup)
+
+The **Quality** screen (amber dot in the menu when exact duplicates are present) lists what
+would make the dataset dirty, considering only images that are still in the dataset:
+
+| Section | What it finds | Typical action |
+| --- | --- | --- |
+| Exact duplicates | Byte-identical files (same SHA-256) | *Exclude all extra copies* |
+| Near duplicates | Perceptual hash (dHash) within `NEAR_DUPLICATE_THRESHOLD` bits: resized, re-encoded, consecutive frames | Review; exclude the copies or *Not duplicates — hide* |
+| Invalid annotations | Images whose polygons fail validation (they block the export) | *Fix in editor* or *Exclude* |
+| Excluded images | Everything currently excluded, with the reason | *Include again* or *Delete* |
+
+In every group you choose which image to **keep**; the suggestion prefers annotated images,
+then "no objects", then more objects, higher resolution and the oldest import.
+
+- **Exclude** (reversible): the image and its annotations stay in the project, but it is
+  skipped by validation, splits and exports. Use it by default.
+- **Delete** (permanent, asks for confirmation): removes the file and its annotations.
+
+Excluding is also available per image in the editor (*Dataset → Exclude this image*) and in
+bulk from the Images screen. If an image is excluded after a split was frozen, exports using
+that split skip it and report a warning; the other partitions stay unchanged.
+
+### 4.5 Export
 
 1. **Validation** — errors (with a *Fix* link per image) and warnings.
 2. **Dataset** — format (Detection / Segmentation), dataset name, and split:
@@ -269,11 +296,13 @@ All endpoints are under `/api` and documented at `/docs`. Errors share one shape
 | GET/POST | `/api/projects` | List / create projects |
 | GET/DELETE | `/api/projects/{pid}` | Get / delete a project |
 | GET/POST | `/api/projects/{pid}/images` | List (`?search=`) / upload images (multipart `files`) |
+| POST | `/api/projects/{pid}/images/bulk` | `{imageIds, action: exclude\|include\|delete, reason?}` |
 | GET/DELETE | `/api/projects/{pid}/images/{iid}` | Image metadata / delete image + annotations |
 | GET | `/api/projects/{pid}/images/{iid}/file`, `/thumbnail` | Image bytes |
 | GET/PUT/DELETE | `/api/projects/{pid}/images/{iid}/annotations` | Read / save (`baseRevision`) / clear |
 | POST | `/api/projects/{pid}/annotations/import-voc?overwrite=` | Import PASCAL VOC XML files |
 | GET | `/api/projects/{pid}/validation` | Project validation report |
+| GET | `/api/projects/{pid}/quality` | Duplicate groups (exact/near) and invalid images |
 | GET/POST | `/api/projects/{pid}/splits`, `GET …/splits/{sid}` | Frozen split manifests |
 | GET/POST | `/api/projects/{pid}/exports` | List / create a YOLO export |
 | GET | `/api/projects/{pid}/exports/{eid}/download` | Download the ZIP |
@@ -288,6 +317,8 @@ make lint            # ruff + oxlint + tsc
 - **Backend (pytest)**: PASCAL VOC parsing and XXE/entity-bomb rejection, box → quadrilateral,
   geometry validation and self-intersection, normalization, Detection/Segmentation lines,
   `data.yaml`, reproducible and duplicate-safe splits (50 → 35/10/5), images without objects,
+  duplicate grouping and keep suggestion, exclusion/inclusion/bulk delete and their effect on
+  validation, splits and exports,
   path traversal and unsafe ids, upload limits, revision conflicts, and an end-to-end API flow
   (import image → import XML → edit 4 vertices → save → reload from a new app instance →
   export both formats → check labels and byte-identical re-export).
@@ -306,6 +337,7 @@ their VOC XML to `samples/generated/` (every 10th image has no plate). `samples/
 - Single user: concurrent edits of the same image are detected (409) but not merged.
 - Touch: tablets can draw, select and drag vertices with pointer events and use the zoom
   buttons; pinch-zoom and other advanced touch gestures are not implemented.
-- Near-duplicate detection is a warning only and is O(n²) — fine for thousands of images.
+- Near-duplicate detection is O(n²) — fine for thousands of images. *Not duplicates — hide*
+  only hides a near-duplicate group until the page is reloaded (it is not persisted).
 - Export runs synchronously in the request; very large projects make the request take longer.
 - The bind-mounted workspace must be writable by the container user (`APP_UID`/`APP_GID` on Linux).

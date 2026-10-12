@@ -1,7 +1,9 @@
 import { CircleAlert, CircleCheck, Keyboard, Trash2 } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
 import { modKeyLabel } from '../../hooks/useKeyboardShortcuts'
+import { exclusionReasonLabel, useImageActions } from '../../hooks/useImageActions'
 import { selectSelectedAnnotation, useEditorStore } from '../../stores/editorStore'
+import { useProjectStore } from '../../stores/projectStore'
 import type { Annotation } from '../../types/annotation'
 import type { IssuesById } from '../../utils/annotationValidation'
 import { imageToYolo } from '../../utils/coordinates'
@@ -78,6 +80,34 @@ function AnnotationRow({
         </button>
       </div>
     </li>
+  )
+}
+
+/** Toggle whether the open image takes part in the dataset (validation, splits, exports). */
+function DatasetToggle() {
+  const imageId = useEditorStore((s) => s.imageId)
+  const image = useProjectStore((s) => s.images.find((img) => img.id === imageId))
+  const { run, busy } = useImageActions()
+  if (!image) return null
+  return (
+    <section className="border-b border-surface-700 p-3">
+      <h2 className="mb-2 text-xs font-semibold tracking-wide text-slate-400 uppercase">Dataset</h2>
+      <label className="flex items-center gap-2 text-xs text-slate-300">
+        <input
+          type="checkbox"
+          className="size-4 accent-rose-500"
+          checked={image.excluded}
+          disabled={busy}
+          onChange={(e) => void run([image.id], e.target.checked ? 'exclude' : 'include', 'manual')}
+        />
+        Exclude this image from the dataset
+      </label>
+      {image.excluded && (
+        <p className="mt-1.5 text-xs text-rose-300">
+          {exclusionReasonLabel(image.excludedReason)} — not validated or exported; annotations are kept.
+        </p>
+      )}
+    </section>
   )
 }
 
@@ -165,6 +195,8 @@ export function AnnotationPanel({ issues, className = '' }: { issues: IssuesById
           This image has no objects (export as background)
         </label>
       </section>
+
+      <DatasetToggle />
 
       {selected && (
         <section className="border-b border-surface-700 p-3">

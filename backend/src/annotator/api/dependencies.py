@@ -12,6 +12,7 @@ from annotator.services.annotations import AnnotationService
 from annotator.services.exports import ExportService
 from annotator.services.images import ImageService
 from annotator.services.projects import ProjectService
+from annotator.services.quality import QualityService
 from annotator.services.splits import SplitService
 from annotator.services.validation import ValidationService
 from annotator.storage.repository import ProjectRepository
@@ -24,6 +25,7 @@ class Container:
     images: ImageService
     annotations: AnnotationService
     validation: ValidationService
+    quality: QualityService
     splits: SplitService
     exports: ExportService
 
@@ -39,6 +41,7 @@ class Container:
             images=ImageService(repo, settings),
             annotations=annotations,
             validation=validation,
+            quality=QualityService(repo, annotations, settings),
             splits=splits,
             exports=ExportService(repo, annotations, splits, validation, settings),
         )

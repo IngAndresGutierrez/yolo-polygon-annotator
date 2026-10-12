@@ -5,7 +5,14 @@ from pathlib import Path, PurePath
 
 from annotator.core.config import Settings
 from annotator.core.errors import AppError, NotFoundError
-from annotator.models.project import ImageImportIssue, ImageImportResult, ImageRecord, Project
+from annotator.models.project import (
+    ImageBulkAction,
+    ImageBulkResult,
+    ImageImportIssue,
+    ImageImportResult,
+    ImageRecord,
+    Project,
+)
 from annotator.services.projects import utcnow
 from annotator.storage.paths import sanitize_filename, slugify
 from annotator.storage.repository import ProjectRepository
@@ -178,3 +185,28 @@ class ImageService:
             project.updated_at = utcnow()
             self._repo.save_project(project)
             self._repo.delete_image_files(project_id, record)
+
+    def bulk(self, project_id: str, request: ImageBulkAction) -> ImageBulkResult:
+        """Exclude, re-include or delete several images in one locked operation."""
+        with self._repo.lock(project_id):
+            project = self._repo.get_project(project_id)
+            by_id = {img.id: img for img in project.images}
+            targets = [by_id[i] for i in dict.fromkeys(request.image_ids) if i in by_id]
+            not_found = [i for i in request.image_ids if i not in by_id]
+            if request.action == "delete":
+                deleted = {img.id for img in targets}
+                project.images = [img for img in project.images if img.id not in deleted]
+            else:
+                exclude = request.action == "exclude"
+                for img in targets:
+                    img.excluded = exclude
+                    img.excluded_reason = (request.reason or "manual") if exclude else None
+            if targets:
+                project.updated_at = utcnow()
+                self._repo.save_project(project)
+            if request.action == "delete":
+                for img in targets:
+                    self._repo.delete_image_files(project_id, img)
+        return ImageBulkResult(
+            action=request.action, updated=[img.id for img in targets], not_found=not_found
+        )

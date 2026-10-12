@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { errorMessage } from '../services/apiClient'
 import { imagesApi, projectsApi } from '../services/projectsApi'
-import type { ImageRecord, ProjectSummary } from '../types/project'
+import type { ImageBulkResult, ImageRecord, ProjectSummary } from '../types/project'
 
 const LAST_PROJECT_KEY = 'yolo-annotator:last-project'
 
@@ -18,6 +18,7 @@ interface ProjectState {
   addImages: (images: ImageRecord[]) => void
   updateImage: (imageId: string, patch: Partial<ImageRecord>) => void
   removeImage: (imageId: string) => void
+  applyBulk: (result: ImageBulkResult, reason?: string) => void
 }
 
 /** Only the last project id goes to localStorage; annotations live on the server. */
@@ -88,6 +89,18 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
     set((s) => ({ images: s.images.map((img) => (img.id === imageId ? { ...img, ...patch } : img)) })),
 
   removeImage: (imageId) => set((s) => ({ images: s.images.filter((img) => img.id !== imageId) })),
+
+  applyBulk: (result, reason) =>
+    set((s) => {
+      const ids = new Set(result.updated)
+      if (result.action === 'delete') return { images: s.images.filter((img) => !ids.has(img.id)) }
+      const excluded = result.action === 'exclude'
+      return {
+        images: s.images.map((img) =>
+          ids.has(img.id) ? { ...img, excluded, excludedReason: excluded ? (reason ?? 'manual') : null } : img,
+        ),
+      }
+    }),
 }))
 
 export const selectCurrentProject = (s: ProjectState): ProjectSummary | null =>

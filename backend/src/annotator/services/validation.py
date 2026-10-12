@@ -19,8 +19,9 @@ class ValidationService:
 
     def validate_project(self, project_id: str) -> ProjectValidationReport:
         project = self._repo.get_project(project_id)
+        included = [img for img in project.images if not img.excluded]
         images: list[ImageValidation] = []
-        for record in project.images:
+        for record in included:
             doc = self._annotations.load(project_id, record)
             issues = validate_image_annotations(
                 doc, self._settings.classes, self._settings.min_polygon_area
@@ -31,7 +32,7 @@ class ValidationService:
                 )
 
         project_issues: list[ValidationIssue] = []
-        exportable = [img for img in project.images if img.status != "pending"]
+        exportable = [img for img in included if img.status != "pending"]
         if not exportable:
             project_issues.append(
                 ValidationIssue(
@@ -39,7 +40,7 @@ class ValidationService:
                     message="No image is annotated or marked as 'no objects' yet",
                 )
             )
-        pending = len(project.images) - len(exportable)
+        pending = len(included) - len(exportable)
         if pending:
             project_issues.append(
                 ValidationIssue(
@@ -48,8 +49,17 @@ class ValidationService:
                     message=f"{pending} image(s) are not annotated and will be excluded by default",
                 )
             )
+        excluded_count = len(project.images) - len(included)
+        if excluded_count:
+            project_issues.append(
+                ValidationIssue(
+                    code="excluded_images",
+                    severity="warning",
+                    message=f"{excluded_count} image(s) are excluded from the dataset",
+                )
+            )
         by_hash: dict[str, list[str]] = defaultdict(list)
-        for record in project.images:
+        for record in included:
             by_hash[record.sha256].append(record.filename)
         for filenames in by_hash.values():
             if len(filenames) > 1:
@@ -66,7 +76,7 @@ class ValidationService:
         return ProjectValidationReport(
             project_id=project_id,
             valid=error_count == 0,
-            image_count=len(project.images),
+            image_count=len(included),
             error_count=error_count,
             warning_count=len(all_issues) - error_count,
             images=images,

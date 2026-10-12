@@ -5,6 +5,7 @@ import { Button } from '../components/ui/Button'
 import { EmptyState, Spinner, Toaster } from '../components/ui/Feedback'
 import { ExportPage } from '../features/export/ExportPage'
 import { GalleryPage } from '../features/gallery/GalleryPage'
+import { QualityPage } from '../features/quality/QualityPage'
 import { useConfigStore } from '../stores/configStore'
 import { useProjectStore } from '../stores/projectStore'
 import { useHashRoute } from './router'
@@ -46,6 +47,8 @@ export function App() {
         <EditorPage imageId={route.imageId} />
       </Suspense>
     )
+  } else if (route.name === 'quality') {
+    page = <QualityPage />
   } else if (route.name === 'export') {
     page = <ExportPage />
   } else {

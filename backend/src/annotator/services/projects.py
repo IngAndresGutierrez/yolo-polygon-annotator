@@ -16,7 +16,8 @@ def utcnow() -> datetime:
 
 
 def summarize(project: Project) -> ProjectSummary:
-    statuses = [image.status for image in project.images]
+    included = [image for image in project.images if not image.excluded]
+    statuses = [image.status for image in included]
     return ProjectSummary(
         id=project.id,
         name=project.name,
@@ -26,6 +27,7 @@ def summarize(project: Project) -> ProjectSummary:
         annotated_count=statuses.count("annotated"),
         negative_count=statuses.count("negative"),
         pending_count=statuses.count("pending"),
+        excluded_count=len(project.images) - len(included),
         classes=project.classes,
     )
 

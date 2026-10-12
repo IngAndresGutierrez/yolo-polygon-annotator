@@ -1,5 +1,5 @@
-import { FolderPlus, Hexagon, Images, PackageOpen, PenTool } from 'lucide-react'
-import { type FormEvent, type ReactNode, useState } from 'react'
+import { FolderPlus, Hexagon, Images, PackageOpen, PenTool, ShieldCheck } from 'lucide-react'
+import { type FormEvent, type ReactNode, useMemo, useState } from 'react'
 import { type Route, navigate } from '../../app/router'
 import { errorMessage } from '../../services/apiClient'
 import { useProjectStore } from '../../stores/projectStore'
@@ -40,8 +40,14 @@ function MainNav({ route }: { route: Route }) {
       disabled: !editorTarget,
       onClick: () => editorTarget && navigate({ name: 'editor', imageId: editorTarget }),
     },
+    { name: 'quality', label: 'Quality', icon: ShieldCheck, onClick: () => navigate({ name: 'quality' }) },
     { name: 'export', label: 'Export', icon: PackageOpen, onClick: () => navigate({ name: 'export' }) },
   ] as const
+  // Cheap client-side hint; the Quality screen computes the full report on the server.
+  const hasExactDuplicates = useMemo(() => {
+    const seen = new Set<string>()
+    return images.some((img) => !img.excluded && (seen.has(img.sha256) || !seen.add(img.sha256)))
+  }, [images])
 
   return (
     <nav aria-label="Main" className="ml-auto flex items-center gap-1">
@@ -61,6 +67,9 @@ function MainNav({ route }: { route: Route }) {
           >
             <Icon className="size-4" aria-hidden />
             <span className="hidden md:inline">{item.label}</span>
+            {item.name === 'quality' && hasExactDuplicates && (
+              <span className="size-2 rounded-full bg-amber-400" title="Duplicate images found" aria-label="Duplicate images found" />
+            )}
           </button>
         )
       })}

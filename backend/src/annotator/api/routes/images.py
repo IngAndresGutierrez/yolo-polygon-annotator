@@ -9,7 +9,12 @@ from fastapi.responses import FileResponse
 from annotator.api.dependencies import ContainerDep
 from annotator.api.uploads import read_uploads
 from annotator.core.errors import NotFoundError
-from annotator.models.project import ImageImportResult, ImageRecord
+from annotator.models.project import (
+    ImageBulkAction,
+    ImageBulkResult,
+    ImageImportResult,
+    ImageRecord,
+)
 
 router = APIRouter(prefix="/api/projects/{project_id}/images", tags=["images"])
 
@@ -36,6 +41,14 @@ async def upload_images(
     settings = container.settings
     uploads = await read_uploads(files, settings.max_upload_bytes, settings.max_files_per_request)
     return await run_in_threadpool(container.images.import_images, project_id, uploads)
+
+
+@router.post("/bulk", response_model=ImageBulkResult)
+def bulk_images(
+    project_id: str, payload: ImageBulkAction, container: ContainerDep
+) -> ImageBulkResult:
+    """Exclude from / re-include in the dataset, or delete, several images at once."""
+    return container.images.bulk(project_id, payload)
 
 
 @router.get("/{image_id}", response_model=ImageRecord)

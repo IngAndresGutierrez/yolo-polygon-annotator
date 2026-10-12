@@ -1,13 +1,18 @@
 import { useSyncExternalStore } from 'react'
 
-/** Three screens do not justify a router dependency; a typed hash router suffices. */
-export type Route = { name: 'gallery' } | { name: 'editor'; imageId: string } | { name: 'export' }
+/** A handful of screens does not justify a router dependency; a typed hash router suffices. */
+export type Route =
+  | { name: 'gallery' }
+  | { name: 'editor'; imageId: string }
+  | { name: 'quality' }
+  | { name: 'export' }
 
 export function parseHash(hash: string): Route {
   const path = hash.replace(/^#\/?/, '')
   const [section, param] = path.split('/')
   if (section === 'editor' && param) return { name: 'editor', imageId: decodeURIComponent(param) }
   if (section === 'export') return { name: 'export' }
+  if (section === 'quality') return { name: 'quality' }
   return { name: 'gallery' }
 }
 
@@ -15,6 +20,8 @@ export function routeToHash(route: Route): string {
   switch (route.name) {
     case 'editor':
       return `#/editor/${encodeURIComponent(route.imageId)}`
+    case 'quality':
+      return '#/quality'
     case 'export':
       return '#/export'
     case 'gallery':

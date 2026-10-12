@@ -47,7 +47,9 @@ class SplitService:
         with self._repo.lock(project_id):
             project = self._repo.get_project(project_id)
             records = [
-                img for img in project.images if request.include_pending or img.status != "pending"
+                img
+                for img in project.images
+                if not img.excluded and (request.include_pending or img.status != "pending")
             ]
             if len(records) < MIN_IMAGES_FOR_SPLIT:
                 raise InvalidInputError(

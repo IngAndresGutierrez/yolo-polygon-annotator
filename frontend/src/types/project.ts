@@ -19,6 +19,9 @@ export interface ImageRecord {
   annotationCount: number
   status: ImageStatus
   revision: number
+  /** Kept in the project but left out of validation, splits and exports. */
+  excluded: boolean
+  excludedReason: string | null
 }
 
 export interface ProjectSummary {
@@ -30,6 +33,7 @@ export interface ProjectSummary {
   annotatedCount: number
   negativeCount: number
   pendingCount: number
+  excludedCount: number
   classes: LabelClass[]
 }
 
@@ -52,4 +56,12 @@ export interface VocImportResult {
   unmatched: ImportIssue[]
   rejected: ImportIssue[]
   warnings: ImportIssue[]
+}
+
+export type ImageBulkActionName = 'exclude' | 'include' | 'delete'
+
+export interface ImageBulkResult {
+  action: ImageBulkActionName
+  updated: string[]
+  notFound: string[]
 }

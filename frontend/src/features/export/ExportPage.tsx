@@ -95,7 +95,8 @@ export function ExportPage() {
     }
   }
 
-  const exportableCount = images.filter((img) => img.status !== 'pending').length
+  const exportableCount = images.filter((img) => !img.excluded && img.status !== 'pending').length
+  const includedCount = images.filter((img) => !img.excluded).length
 
   return (
     <div className="h-full overflow-y-auto">
@@ -113,7 +114,7 @@ export function ExportPage() {
           onSubmit={() => void submit()}
           splits={splits}
           exportableCount={exportableCount}
-          totalCount={images.length}
+          totalCount={includedCount}
           busy={busy}
           disabled={!report?.valid}
         />

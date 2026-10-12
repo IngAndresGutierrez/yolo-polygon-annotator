@@ -1,4 +1,4 @@
-import { CircleAlert, CircleCheck, RefreshCw, TriangleAlert } from 'lucide-react'
+import { CircleAlert, CircleCheck, RefreshCw, ShieldCheck, TriangleAlert } from 'lucide-react'
 import { navigate } from '../../app/router'
 import type { ProjectValidationReport } from '../../types/export'
 import { Button } from '../ui/Button'
@@ -17,9 +17,14 @@ export function ValidationSummary({ report, loading, onRefresh }: ValidationSumm
         <h2 id="validation-title" className="text-sm font-semibold text-white">
           1. Validation
         </h2>
-        <Button size="sm" variant="ghost" icon={RefreshCw} onClick={onRefresh} disabled={loading}>
-          Re-check
-        </Button>
+        <div className="flex gap-1">
+          <Button size="sm" variant="ghost" icon={ShieldCheck} onClick={() => navigate({ name: 'quality' })}>
+            Clean up dataset
+          </Button>
+          <Button size="sm" variant="ghost" icon={RefreshCw} onClick={onRefresh} disabled={loading}>
+            Re-check
+          </Button>
+        </div>
       </div>
       {loading && !report ? (
         <Spinner />

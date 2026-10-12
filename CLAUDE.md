@@ -44,7 +44,10 @@ Always run `make lint` and `make test` before committing. Never claim a check pa
 8. **Exports are reproducible**: deterministic split (sorted groups, seeded shuffle, exact
    duplicates grouped), fixed ZIP timestamps, explicit Unix permissions on ZIP entries
    (directories need 0755 or `unzip` makes them untraversable).
-9. No database, auth, cloud, queues, OBB export, training or inference in the MVP.
+9. **Excluded images** (`ImageRecord.excluded`) stay in the project but must be skipped by
+   everything that builds the dataset: validation, quality report, splits and exports.
+   New dataset-level features must honour the flag too.
+10. No database, auth, cloud, queues, OBB export, training or inference in the MVP.
 
 ## Backend layout (`backend/src/annotator`)
 

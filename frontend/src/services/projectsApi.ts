@@ -1,4 +1,11 @@
-import type { ImageImportResult, ImageRecord, ProjectSummary, VocImportResult } from '../types/project'
+import type {
+  ImageBulkActionName,
+  ImageBulkResult,
+  ImageImportResult,
+  ImageRecord,
+  ProjectSummary,
+  VocImportResult,
+} from '../types/project'
 import { API_BASE_URL, api } from './apiClient'
 
 const enc = encodeURIComponent
@@ -14,6 +21,8 @@ export const imagesApi = {
   list: (projectId: string) => api.get<ImageRecord[]>(`${projectPath(projectId)}/images`),
   upload: (projectId: string, files: readonly File[]) =>
     api.upload<ImageImportResult>(`${projectPath(projectId)}/images`, files),
+  bulk: (projectId: string, imageIds: readonly string[], action: ImageBulkActionName, reason?: string) =>
+    api.post<ImageBulkResult>(`${projectPath(projectId)}/images/bulk`, { imageIds, action, reason: reason ?? null }),
   remove: (projectId: string, imageId: string) => api.delete(`${projectPath(projectId)}/images/${enc(imageId)}`),
   importVoc: (projectId: string, files: readonly File[], overwrite: boolean) =>
     api.upload<VocImportResult>(`${projectPath(projectId)}/annotations/import-voc?overwrite=${overwrite}`, files),
